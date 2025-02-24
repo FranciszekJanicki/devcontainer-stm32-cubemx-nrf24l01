@@ -13,6 +13,7 @@
 #include <numbers>
 #include <numeric>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 namespace Utility {
@@ -370,6 +371,63 @@ namespace Utility {
         return static_cast<To>(std::clamp(from_value, from_min, from_max) - from_min) * (to_max - to_min) /
                    static_cast<To>(from_max - from_min) -
                to_min;
+    }
+
+    template <std::unsigned_integral UInt>
+    inline UInt reflection(UInt const data) noexcept
+    {
+        UInt reflection{};
+        for (std::uint8_t i{}; i < std::bit_width(data); ++i) {
+            write_bit(reflection, read_bit(data, i), std::bit_width(data) - 1U - i);
+        }
+        return reflection;
+    }
+
+    template <std::unsigned_integral UInt, std::size_t SIZE>
+    inline UInt calculate_crc(std::array<std::uint8_t, SIZE> const& data,
+                              UInt const init,
+                              UInt const polynomial,
+                              UInt const xor_out,
+                              bool const reflect_in,
+                              bool const reflect_out) noexcept
+    {
+        UInt crc{init};
+        UInt msb_mask{1U << (std::bit_width(crc) - 1U)};
+        UInt crc_mask{(1U << std::bit_width(crc)) - 1U};
+
+        for (std::uint8_t byte : data) {
+            if (reflect_in) {
+                byte = reflection(byte);
+            }
+            crc ^= byte << (std::bit_width(crc) - 8U);
+
+            for (std::uint8_t bit{}; bit < 8U; ++bit) {
+                if (crc & msb_mask) {
+                    crc = (crc << 1U) ^ polynomial;
+                } else {
+                    crc <<= 1U;
+                }
+            }
+        }
+
+        if (reflect_out) {
+            crc = reflect(crc);
+        }
+        crc ^= xor_out;
+        return crc & crc_mask;
+    }
+
+    enum struct RegRW : std::uint8_t {
+        REG_READ,
+        REG_WRITE,
+    };
+
+    inline std::uint8_t reg_address_to_spi_command_byte(std::uint8_t const reg_address, RegRW const reg_rw) noexcept
+    {
+        auto address_width = std::bit_width(reg_address);
+        auto command_byte = reg_address;
+        write_bit(command_byte, reg_rw == RegRW::REG_WRITE, static_cast<std::uint8_t>(address_width - 1U));
+        return command_byte;
     }
 
 }; // namespace Utility

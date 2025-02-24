@@ -139,7 +139,7 @@ namespace Utility {
         std::array<std::uint8_t, SIZE> receive{};
         if (this->initialized_) {
             HAL_GPIO_WritePin(this->gpio_, this->chip_select_, GPIO_PinState::GPIO_PIN_RESET);
-            HAL_SPI_Receive(this->spi_bus_, receive.data(), receive.size(), TIMEOUT);
+            HAL_SPI_Receive(this->spi_bus_, receive.data(), SIZE, TIMEOUT);
             HAL_GPIO_WritePin(this->gpio_, this->chip_select_, GPIO_PinState::GPIO_PIN_SET);
         }
         return receive;
@@ -160,10 +160,11 @@ namespace Utility {
     template <std::size_t SIZE>
     std::array<std::uint8_t, SIZE> SPIDevice::read_bytes(std::uint8_t const reg_address) const noexcept
     {
+        std::uint8_t command = Utility::reg_address_to_spi_command_byte(reg_address, Utility::RegRW::REG_READ);
         std::array<std::uint8_t, SIZE> read{};
         if (this->initialized_) {
             HAL_GPIO_WritePin(this->gpio_, this->chip_select_, GPIO_PinState::GPIO_PIN_RESET);
-            HAL_SPI_TransmitReceive(this->spi_bus_, &reg_address, read.data(), read.size(), TIMEOUT);
+            HAL_SPI_TransmitReceive(this->spi_bus_, &command, read.data(), read.size(), TIMEOUT);
             HAL_GPIO_WritePin(this->gpio_, this->chip_select_, GPIO_PinState::GPIO_PIN_SET);
         }
         return read;
@@ -187,8 +188,10 @@ namespace Utility {
     void SPIDevice::write_bytes(std::uint8_t const reg_address,
                                 std::array<std::uint8_t, SIZE> const& bytes) const noexcept
     {
-        std::array<std::uint8_t, 1UL + SIZE> write{reg_address};
-        std::ranges::copy(bytes, write.data() + 1UL);
+        std::uint8_t command = Utility::reg_address_to_spi_command_byte(reg_address, Utility::RegRW::REG_WRITE);
+        std::array<std::uint8_t, 1UL + SIZE> write{};
+        std::memcpy(write.data(), &command, 1UL);
+        std::memcpy(write.data() + 1UL, bytes.data(), SIZE);
         if (this->initialized_) {
             HAL_GPIO_WritePin(this->gpio_, this->chip_select_, GPIO_PinState::GPIO_PIN_RESET);
             HAL_SPI_Transmit(this->spi_bus_, write.data(), write.size(), TIMEOUT);
