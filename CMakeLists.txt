@@ -43,6 +43,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     "Core/Inc/spi_device.hpp"
     "Core/Src/spi_device.cpp"
     "Core/Src/nrf24l01.cpp"
+    "Core/Inc/nrf24l01_config.hpp"
 )
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE

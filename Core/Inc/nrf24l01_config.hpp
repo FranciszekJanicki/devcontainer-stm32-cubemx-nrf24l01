@@ -41,8 +41,8 @@ namespace nRF24L01 {
     };
 
     enum struct AirDataRate : std::uint8_t {
-        RATE_1MBPS,
-        RATE_2MBPS,
+        RATE_1MBPS = 0x00,
+        RATE_2MBPS = 0x01,
     };
 
     enum struct OutputPower : std::uint8_t {
@@ -64,12 +64,43 @@ namespace nRF24L01 {
         TX_MODE,
     };
 
-    enum struct MaskInt : std::uint8_t {
-        IRQ_REFLECT_INT = 0x01,
-        IRQ_FALLING_INT = 0x00,
+    enum struct MaskInterrupt : std::uint8_t {
+        INT_DISABLED = 0x01,
+        INT_ACTIVE_LOW = 0x00,
     };
 
-    enum struct RegAddress : std::uint8_t {};
+    enum struct RTCtrl : std::uint8_t {
+        PRX = 0x01,
+        PTX = 0x00,
+    };
+
+    enum struct RTAddress : std::uint8_t {
+        LEN_3BYTES = 0b01,
+        LEN_4BYTES = 0b10,
+        LEN_5BYTES = 0b11,
+    };
+
+    enum struct RetransmitDelay : std::uint8_t {
+        WAIT_250US = 0b0000,
+        WAIT_500US = 0b0001,
+        WAIT_750US = 0b0010,
+        WAIT_4000US = 0b1111,
+    };
+
+    enum struct RetransmitCount : std::uint8_t {
+        DISABLED = 0b0000,
+        RETRY_X1 = 0b0001,
+        RETRY_X15 = 0b1111,
+    };
+
+    enum struct DataPipe : std::uint8_t {
+        PIPE_NUM0 = 0b000,
+        PIPE_NUM1 = 0b001,
+        PIPE_NUM2 = 0b011,
+        PIPE_NUM3 = 0b101,
+        NOT_USED = 0b110,
+        RX_FIFO_EMPTY = 0b111,
+    };
 
     enum struct Command : std::uint8_t {
         RX_PAYLOAD = 0b01100001,
@@ -87,56 +118,127 @@ namespace nRF24L01 {
         NOP = 0b11111111,
     };
 
-    template <std::size_t ADDRESS_SIZE, std::size_t PAYLOAD_SIZE>
+    enum struct PayloadLen : std::uint8_t {
+        LEN_0BYTES = 0b000000,
+        LEN_32BYTES = 0b100000,
+        DONT_CARE = 0b100001,
+    };
+
+    struct ControlField {
+        uint8_t payload_length : 6;
+        uint8_t pid : 2;
+    } __attribute__((packed));
+
+    static constexpr std::uint32_t TIME_STANDBY_2A_NS = 130000UL;
+
+    inline std::uint32_t air_data_rate_to_bps(AirDataRate const air_data_rate) noexcept
+    {
+        switch (air_data_rate) {
+            case AirDataRate::RATE_1MBPS:
+                return 1000000UL;
+            case AirDataRate::RATE_2MBPS:
+                return 2000000UL;
+            default:
+                return 0UL;
+        }
+    }
+
+    inline std::uint32_t air_data_rate_to_irq_time_ns(AirDataRate const air_data_rate) noexcept
+    {
+        switch (air_data_rate) {
+            case AirDataRate::RATE_1MBPS:
+                return 8200UL;
+            case AirDataRate::RATE_2MBPS:
+                return 6000UL;
+            default:
+                return 0UL;
+        }
+    }
+
+    template <std::size_t ADDRESS_SIZE, std::size_t PAYLOAD_SIZE, std::size_t CRC_SIZE>
     inline auto make_shock_burst_packet(std::uint8_t const preamble,
                                         std::array<std::uint8_t, ADDRESS_SIZE> const address,
                                         std::array<std::uint8_t, PAYLOAD_SIZE> const& payload,
-                                        std::uint16_t const crc) noexcept
+                                        std::array<std::uint8_t, CRC_SIZE> const crc) noexcept
         -> std::array<std::uint8_t, sizeof(preamble) + ADDRESS_SIZE + PAYLOAD_SIZE + sizeof(crc)>
     {
         static_assert(3UL <= ADDRESS_SIZE << 5UL);
         static_assert(1UL <= PAYLOAD_SIZE <= 32UL);
 
         std::array<std::uint8_t, sizeof(preamble) + ADDRESS_SIZE + PAYLOAD_SIZE + sizeof(crc)> shock_burst_packet{};
-        std::memcpy(shock_burst_packet.data(), &preamble, sizoef(preamble));
+        std::memcpy(shock_burst_packet.data(), &preamble, sizeof(preamble));
         std::memcpy(shock_burst_packet.data() + sizeof(preamble), address.data(), ADDRESS_SIZE);
         std::memcpy(shock_burst_packet.data() + sizeof(preamble) + ADDRESS_SIZE, payload.data(), PAYLOAD_SIZE);
-        std::memcpy(shock_burst_packet.data() + sizeof(preamble) + ADDRESS_SIZE + PAYLOAD_SIZE, &crc, sizeof(crc));
+        std::memcpy(shock_burst_packet.data() + sizeof(preamble) + ADDRESS_SIZE + PAYLOAD_SIZE, crc.data(), crc.size());
         return shock_burst_packet;
     }
 
-    template <std::size_t ADDRESS_SIZE, std::size_t PAYLOAD_SIZE>
+    template <std::size_t ADDRESS_SIZE, std::size_t PAYLOAD_SIZE, std::size_t CRC_SIZE>
     inline auto make_enhanced_shock_burst_packet(std::uint8_t const preamble,
                                                  std::uint8_t const control_field,
                                                  std::array<std::uint8_t, ADDRESS_SIZE> const address,
                                                  std::array<std::uint8_t, PAYLOAD_SIZE> const& payload,
-                                                 std::uint16_t const crc) noexcept
-        -> std::array<std::uint8_t,
-                      sizeof(preamble) + sizeof(control_field) + ADDRESS_SIZE + PAYLOAD_SIZE + sizeof(crc)>
+                                                 std::array<std::uint8_t, CRC_SIZE> const crc) noexcept
+        -> std::array<std::uint8_t, sizeof(preamble) + sizeof(control_field) + ADDRESS_SIZE + PAYLOAD_SIZE + CRC_SIZE>
     {
         static_assert(3UL <= ADDRESS_SIZE << 5UL);
         static_assert(0UL <= PAYLOAD_SIZE <= 32UL);
 
-        std::array<std::uint8_t, sizeof(preamble) + sizeof(control_field) + ADDRESS_SIZE + PAYLOAD_SIZE + sizeof(crc)>
+        std::array<std::uint8_t, sizeof(preamble) + sizeof(control_field) + ADDRESS_SIZE + PAYLOAD_SIZE + CRC_SIZE>
             enhanced_shock_burst_packet{};
-        std::memcpy(enhanced_shock_burst_packet.data(), &preamble, sizoef(preamble));
+        std::memcpy(enhanced_shock_burst_packet.data(), &preamble, sizeof(preamble));
         std::memcpy(enhanced_shock_burst_packet.data() + sizeof(preamble), &control_field, sizeof(control_field));
         std::memcpy(enhanced_shock_burst_packet.data() + sizeof(preamble) + sizeof(control_field),
                     address.data(),
-                    ADDRESS_SIZE);
-        std::memcpy(enhanced_shock_burst_packet.data() + sizeof(preamble) + sizeof(control_field) + ADDRESS_SIZE,
+                    address.size());
+        std::memcpy(enhanced_shock_burst_packet.data() + sizeof(preamble) + sizeof(control_field) + address.size(),
                     payload.data(),
-                    PAYLOAD_SIZE);
-        std::memcpy(enhanced_shock_burst_packet.data() + sizeof(preamble) + sizeof(control_field) + ADDRESS_SIZE +
-                        PAYLOAD_SIZE,
-                    &crc,
-                    sizeof(crc));
+                    payload.size());
+        std::memcpy(enhanced_shock_burst_packet.data() + sizeof(preamble) + sizeof(control_field) + address.size() +
+                        payload.size(),
+                    crc.data(),
+                    crc.size());
         return enhanced_shock_burst_packet;
     }
 
-    [[nodiscard]] inline std::uint32_t frequency_mhz_to_rf_channel_frequency(std::uint32_t const frequency_mhz) noexcept
+    inline std::uint32_t frequency_mhz_to_rf_channel_frequency(std::uint32_t const frequency_mhz) noexcept
     {
         return frequency_mhz - 2400UL;
+    }
+
+    inline std::uint32_t get_time_on_air_ns(std::size_t const address_size,
+                                            std::size_t const payload_size,
+                                            std::size_t const crc_size,
+                                            AirDataRate const air_data_rate) noexcept
+    {
+        return 1000000000UL * (8UL * (1UL + address_size + payload_size + crc_size) + 9UL) /
+               air_data_rate_to_bps(air_data_rate);
+    }
+
+    inline std::uint32_t get_time_on_air_ack_ns(std::size_t const address_size,
+                                                std::size_t const payload_size,
+                                                std::size_t const crc_size,
+                                                AirDataRate const air_data_rate) noexcept
+    {
+        return get_time_on_air_ns(address_size, payload_size, crc_size, air_data_rate);
+    }
+
+    inline std::uint32_t get_time_upload_ns(std::size_t const payload_size,
+                                            std::uint32_t const spi_data_rate_bps) noexcept
+    {
+        return 1000000000UL * 8UL * payload_size / spi_data_rate_bps;
+    }
+
+    inline std::uint32_t get_time_enhcanced_shock_burst_cycle_ns(std::size_t const address_size,
+                                                                 std::size_t const payload_size,
+                                                                 std::size_t const crc_size,
+                                                                 AirDataRate const air_data_rate,
+                                                                 std::uint32_t const spi_data_rate_bps) noexcept
+    {
+        return get_time_upload_ns(payload_size, spi_data_rate_bps) + 2 * TIME_STANDBY_2A_NS +
+               get_time_on_air_ns(address_size, payload_size, crc_size, air_data_rate) +
+               get_time_on_air_ack_ns(address_size, payload_size, crc_size, air_data_rate) +
+               air_data_rate_to_irq_time_ns(air_data_rate);
     }
 
 }; // namespace nRF24L01
