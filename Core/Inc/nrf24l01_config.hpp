@@ -8,7 +8,7 @@
 
 namespace nRF24L01 {
 
-    enum struct RegAddress : std::uint8_t {
+    enum struct RA : std::uint8_t {
         CONFIG = 0x00,
         EN_AA = 0x01,
         EN_RXADDR = 0x02,
@@ -18,7 +18,7 @@ namespace nRF24L01 {
         RF_SETUP = 0x06,
         STATUS = 0x07,
         OBSERVE_TX = 0x08,
-        CD = 0x09,
+        RPD = 0x09,
         RX_ADDR_P0 = 0x0A,
         RX_ADDR_P1 = 0x0B,
         RX_ADDR_P2 = 0x0C,
@@ -38,6 +38,22 @@ namespace nRF24L01 {
         RX_PLD,
         DYNPD = 0x1C,
         FEATURE = 0x1D,
+    };
+
+    enum struct CMD : std::uint8_t {
+        RX_PAYLOAD = 0b01100001,
+        TX_PAYLOAD = 0b10100000,
+        FLUSH_TX = 0b11100001,
+        FLUSH_RX = 0b11100010,
+        REUSE_TX_PL = 0b11100011,
+        ACTIVATE = 0b01010000,
+        R_RX_PL_WID = 0b01100000,
+        W_ACK_PAYLOAD_00 = 0b1011000,
+        W_ACK_PAYLOAD_01 = 0b1011001,
+        W_ACK_PAYLOAD_02 = 0b1011011,
+        W_ACK_PAYLOAD_03 = 0b1011101,
+        W_TX_PAYLOAD_NOACK = 0b1011000,
+        NOP = 0b11111111,
     };
 
     enum struct AirDataRate : std::uint8_t {
@@ -100,22 +116,6 @@ namespace nRF24L01 {
         PIPE_NUM3 = 0b101,
         NOT_USED = 0b110,
         RX_FIFO_EMPTY = 0b111,
-    };
-
-    enum struct Command : std::uint8_t {
-        RX_PAYLOAD = 0b01100001,
-        TX_PAYLOAD = 0b10100000,
-        FLUSH_TX = 0b11100001,
-        FLUSH_RX = 0b11100010,
-        REUSE_TX_PL = 0b11100011,
-        ACTIVATE = 0b01010000,
-        R_RX_PL_WID = 0b01100000,
-        W_ACK_PAYLOAD_00 = 0b1011000,
-        W_ACK_PAYLOAD_01 = 0b1011001,
-        W_ACK_PAYLOAD_02 = 0b1011011,
-        W_ACK_PAYLOAD_03 = 0b1011101,
-        W_TX_PAYLOAD_NOACK = 0b1011000,
-        NOP = 0b11111111,
     };
 
     enum struct PayloadLen : std::uint8_t {

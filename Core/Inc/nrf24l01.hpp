@@ -124,6 +124,27 @@ namespace nRF24L01 {
         FEATURE get_feature_register() const noexcept;
         void set_feature_register(FEATURE const feature) const noexcept;
 
+        void send_rx_payload_command() const noexcept;
+        void send_tx_payload_command() const noexcept;
+
+        void send_flush_tx_command() const noexcept;
+        void send_flush_rx_command() const noexcept;
+
+        void send_reuse_tx_pl_command() const noexcept;
+
+        void send_activate_command() const noexcept;
+
+        void send_r_rx_pl_wid_command() const noexcept;
+
+        void send_w_ack_payload_00_command() const noexcept;
+        void send_w_ack_payload_01_command() const noexcept;
+        void send_w_ack_payload_02_command() const noexcept;
+        void send_w_ack_payload_03_command() const noexcept;
+
+        void send_w_tx_payload_noack_command() const noexcept;
+
+        void send_nop_command() const noexcept;
+
         bool initialized_{false};
 
         SPIDevice spi_device_{};
